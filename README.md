@@ -11,7 +11,7 @@ py -3.14 -m streamlit run app.py
 
 If your Python version differs, replace `3.14` with the version shown by `py --list`.
 
-The app opens with synthetic data. Upload a CSV or a movement video (MP4, MOV, AVI, M4V) when you are ready to analyse a trial. The first video run downloads MediaPipe's pose-landmarker model to the operating system temporary folder.
+The app opens with synthetic data. Upload a CSV or a movement video (MP4, MOV, AVI, M4V) when you are ready to analyse a trial. The first video run downloads MediaPipe's pose-landmarker model to the operating system temporary folder. MediaPipe supplies the OpenCV runtime used for video decoding.
 
 ## Input format
 
