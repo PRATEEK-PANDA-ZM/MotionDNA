@@ -48,6 +48,10 @@ try:
 except (ValueError, pd.errors.ParserError) as error:
     st.error(f"Could not analyse the trial: {error}")
     st.stop()
+except Exception as error:
+    st.error(f"Could not process video: {error}")
+    st.warning("⚠️ **MediaPipe Compatibility Notice**: MediaPipe C++ native bindings are incompatible with Python 3.14. If you are deployed on Streamlit Cloud, go to **App Settings > Advanced settings** and change the **Python version to 3.11 or 3.10**.")
+    st.stop()
 
 score, band, findings = score_movement_risk(result, movement)
 peak = result["mean_knee_flexion_deg"].max()
