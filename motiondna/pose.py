@@ -54,12 +54,12 @@ def extract_video_landmarks(
     body_height_m: float = 1.70,
     sample_every: int = 1,
     progress_callback=None,
-) -> tuple[pd.DataFrame, np.ndarray | None, float, int]:
+) -> tuple[pd.DataFrame, np.ndarray | None, float, int, list[np.ndarray]]:
     """Extract one-person pose landmarks from a video.
 
-Returns a landmark table, annotated preview frame, source FPS, and the number
-of frames where a pose was found.  `sample_every` allows faster dashboard
-prototyping on long videos.
+Returns a landmark table, annotated preview frame, source FPS, the number
+of frames where a pose was found, and a list of annotated video frames.
+`sample_every` allows faster dashboard prototyping on long videos.
     """
     if sample_every < 1 or body_height_m <= 0:
         raise ValueError("Body height and frame sampling values must be positive.")
@@ -77,6 +77,7 @@ prototyping on long videos.
         min_tracking_confidence=0.5,
     )
     rows: list[dict[str, float]] = []
+    annotated_frames: list[np.ndarray] = []
     preview = None
     index = 0
     try:
@@ -99,8 +100,10 @@ prototyping on long videos.
                             row[f"{name}_y"] = (1 - point.y) * body_height_m
                             row[f"{name}_z"] = point.z * body_height_m
                         rows.append(row)
+                        annotated_frame = cv2.cvtColor(_draw_lower_limb(bgr, pose), cv2.COLOR_BGR2RGB)
+                        annotated_frames.append(annotated_frame)
                         if preview is None:
-                            preview = cv2.cvtColor(_draw_lower_limb(bgr, pose), cv2.COLOR_BGR2RGB)
+                            preview = annotated_frame
                 index += 1
                 if progress_callback and frame_count:
                     progress_callback(min(index / frame_count, 1.0))
@@ -108,4 +111,4 @@ prototyping on long videos.
         capture.release()
     if len(rows) < 3:
         raise ValueError("Too few poses were detected. Ensure one full body is visible and well lit.")
-    return pd.DataFrame(rows), preview, float(fps) / sample_every, len(rows)
+    return pd.DataFrame(rows), preview, float(fps) / sample_every, len(rows), annotated_frames

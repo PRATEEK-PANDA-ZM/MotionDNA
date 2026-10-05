@@ -25,6 +25,7 @@ with st.sidebar:
 
 try:
     preview = None
+    annotated_frames = []
     source_note = "Showing synthetic demo data."
     if video:
         suffix = Path(video.name).suffix or ".mp4"
@@ -33,7 +34,7 @@ try:
             video_path = temporary.name
         progress = st.progress(0, text="Detecting pose landmarks in video…")
         try:
-            raw, preview, derived_fps, detected = extract_video_landmarks(
+            raw, preview, derived_fps, detected, annotated_frames = extract_video_landmarks(
                 video_path, body_height, sample_every, lambda value: progress.progress(value, text="Detecting pose landmarks in video…")
             )
         finally:
@@ -59,19 +60,68 @@ asymmetry = (result["left_knee_flexion_deg"] - result["right_knee_flexion_deg"])
 velocity = result["mean_knee_velocity_dps"].abs().max()
 
 st.info(source_note)
-if preview is not None:
-    st.image(preview, caption="MediaPipe lower-limb pose preview", use_container_width=True)
+
 a, b, c, d = st.columns(4)
 a.metric("Screening score", f"{score}/100", band)
 b.metric("Peak knee flexion", f"{peak:.1f}°")
 c.metric("Max asymmetry", f"{asymmetry:.1f}°")
 d.metric("Peak angular velocity", f"{velocity:.0f}°/s")
 
-st.subheader("Knee kinematics")
-chart = result.melt(id_vars="time_s", value_vars=["left_knee_flexion_deg", "right_knee_flexion_deg"], var_name="Side", value_name="Knee flexion (°)")
-st.plotly_chart(px.line(chart, x="time_s", y="Knee flexion (°)", color="Side", labels={"time_s": "Time (s)"}), use_container_width=True)
+# Frame-by-Frame Inspector Section
+st.divider()
+st.subheader("🔍 Frame-by-Frame Inspector")
+total_frames = len(result)
+if total_frames > 0:
+    selected_idx = st.slider("Scrub through frames (Time step)", 0, total_frames - 1, 0, format="Frame %d")
+    
+    col_img, col_metrics = st.columns([1, 1])
+    
+    with col_img:
+        if annotated_frames and selected_idx < len(annotated_frames):
+            st.image(annotated_frames[selected_idx], caption=f"Frame {selected_idx} Pose Overlay", use_container_width=True)
+        elif preview is not None:
+            st.image(preview, caption="MediaPipe lower-limb pose preview", use_container_width=True)
+        else:
+            st.info("Uploaded CSV or synthetic trial mode active (no raw video frames available).")
+            
+    with col_metrics:
+        current_time = float(result.loc[selected_idx, "time_s"])
+        l_flex = float(result.loc[selected_idx, "left_knee_flexion_deg"])
+        r_flex = float(result.loc[selected_idx, "right_knee_flexion_deg"])
+        inst_asymmetry = abs(l_flex - r_flex)
+        inst_vel = float(result.loc[selected_idx, "mean_knee_velocity_dps"])
+        l_offset = float(result.loc[selected_idx, "left_knee_ankle_offset_cm"])
+        r_offset = float(result.loc[selected_idx, "right_knee_ankle_offset_cm"])
+        
+        st.markdown(f"### Frame `{selected_idx}` Metrics *(t = {current_time:.2f}s)*")
+        m1, m2 = st.columns(2)
+        m1.metric("Left Knee Flexion", f"{l_flex:.1f}°")
+        m2.metric("Right Knee Flexion", f"{r_flex:.1f}°")
+        
+        m3, m4 = st.columns(2)
+        m3.metric("Instant Asymmetry", f"{inst_asymmetry:.1f}°")
+        m4.metric("Mean Velocity", f"{inst_vel:.0f}°/s")
+        
+        st.caption(f"Knee-Ankle Offset: Left {l_offset:+.1f} cm | Right {r_offset:+.1f} cm")
 
-st.subheader("Movement-screen findings")
+st.divider()
+st.subheader("Knee Kinematics Over Time")
+chart = result.melt(id_vars="time_s", value_vars=["left_knee_flexion_deg", "right_knee_flexion_deg"], var_name="Side", value_name="Knee flexion (°)")
+fig = px.line(chart, x="time_s", y="Knee flexion (°)", color="Side", labels={"time_s": "Time (s)"})
+
+if total_frames > 0:
+    selected_time = float(result.loc[selected_idx, "time_s"])
+    fig.add_vline(
+        x=selected_time,
+        line_dash="dash",
+        line_color="red",
+        annotation_text=f"Frame {selected_idx} ({selected_time:.2f}s)",
+        annotation_position="top left"
+    )
+
+st.plotly_chart(fig, use_container_width=True)
+
+st.subheader("Movement-Screen Findings")
 st.dataframe(pd.DataFrame(findings), use_container_width=True, hide_index=True)
 st.caption("Educational screening only. This tool does not diagnose injury risk; interpret results with a qualified clinician and validate against calibrated 3D capture.")
 
